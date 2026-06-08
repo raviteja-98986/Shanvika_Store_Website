@@ -19,15 +19,20 @@ import { FaWhatsapp } from "react-icons/fa";
 import {
   deleteBanner,
   deleteCategory,
+  deleteOrder,
   deleteProduct,
   loginAdmin,
   logoutAdmin,
   changeAdminEmail,
   changeAdminPassword,
+  clearAdminSession,
+  setAdminSession,
+  hasAdminSession,
   saveBanner,
   saveCategory,
   saveProduct,
   saveStoreSettings,
+  sendWhatsAppNotification,
   subscribeToAdminAuth,
   subscribeToStoreSettings,
   subscribeToBanners,
@@ -113,8 +118,15 @@ export default function Admin() {
 
   useEffect(() => {
     return subscribeToAdminAuth((user) => {
-      setAuthUser(user);
-      setAuthReady(true);
+      if (user && !hasAdminSession()) {
+        logoutAdmin().then(() => {
+          setAuthUser(null);
+          setAuthReady(true);
+        });
+      } else {
+        setAuthUser(user);
+        setAuthReady(true);
+      }
     });
   }, []);
 
@@ -246,6 +258,8 @@ export default function Admin() {
 
     try {
       await loginAdmin(loginForm.email, loginForm.password);
+      setAdminSession();
+      setLoginForm({ email: "", password: "" });
     } catch (error) {
       console.error("Admin login failed:", error);
       setLoginError("Login failed. Check the Firebase Auth email and password.");
@@ -825,24 +839,53 @@ export default function Admin() {
                   <p className="text-xs text-gray-500">{order.phone}</p>
                   <p className="text-xs text-gray-500 mt-1">{order.address}</p>
                 </div>
-                <div className="lg:col-span-5 text-xs text-gray-600">
+                <div className="lg:col-span-4 text-xs text-gray-600">
                   {order.items?.map((item, index) => (
                     <p key={`${order.id}-${index}`}>
                       {item.name} x {item.quantity} = ₹{(item.offerPrice || item.price) * item.quantity}
                     </p>
                   ))}
                 </div>
-                <div className="lg:col-span-3 flex lg:justify-end items-start gap-3">
+                <div className="lg:col-span-4 flex lg:justify-end items-start gap-3">
                   <span className="font-display font-extrabold text-secondary">₹{order.totalAmount}</span>
                   <select
                     value={order.status}
-                    onChange={(event) => updateOrderStatus(order.id, event.target.value)}
+                    onChange={(event) => {
+                      const newStatus = event.target.value;
+                      updateOrderStatus(order.id, newStatus);
+                      
+                      // Send WhatsApp notification based on status
+                      let statusMsg = "";
+                      if (newStatus === "Dispatched") {
+                        statusMsg = `🚚 Hi ${order.customerName}, Your order #${order.id.slice(-8)} has been dispatched and is on the way. You'll receive it soon. Thank you!`;
+                      } else if (newStatus === "Delivered") {
+                        statusMsg = `Hi ${order.customerName}, your order #${order.id.slice(-8)} has been delivered! We hope you enjoy it. Thank you for shopping with us!`;
+                      } else if (newStatus === "Cancelled") {
+                        statusMsg = `Hi ${order.customerName}, your order #${order.id.slice(-8)} has been cancelled. If you have any questions, please contact us. Thank you!`;
+                      }
+                      
+                      if (statusMsg) {
+                        sendWhatsAppNotification(order.phone, statusMsg);
+                      }
+                    }}
                     className="px-3 py-1 border border-gray-200 rounded-lg text-xs"
                   >
                     <option value="Pending">Pending</option>
                     <option value="Dispatched">Dispatched</option>
                     <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete this order from ${order.customerName}?`)) {
+                        deleteOrder(order.id);
+                      }
+                    }}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete order from list"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}

@@ -40,6 +40,7 @@ let storage = null;
 let auth = null;
 
 const CLOUD_DISABLED_KEY = "shanvika_cloud_disabled";
+const ADMIN_SESSION_KEY = "shanvika_admin_session";
 const USE_FIREBASE_STORAGE = import.meta.env.VITE_USE_FIREBASE_STORAGE === "true";
 
 function isCloudDisabled() {
@@ -581,6 +582,37 @@ export async function updateOrderStatus(orderId, status) {
   }
 }
 
+export async function deleteOrder(orderId) {
+  if (shouldUseCloud()) {
+    try {
+      requireAdminForWrite("delete order");
+      await deleteDoc(doc(firestore, "orders", orderId));
+      return;
+    } catch (error) {
+      if (!isPermissionError(error)) {
+        throw error;
+      }
+      disableCloud(error);
+    }
+  }
+
+  await delay();
+  localDelete("shanvika_orders", orderId);
+}
+
+export function sendWhatsAppNotification(phoneNumber, message) {
+  if (!phoneNumber || !message) {
+    console.warn("WhatsApp notification skipped: missing phone or message");
+    return;
+  }
+  
+  const formattedPhone = String(phoneNumber).replace(/\D/g, "");
+  const encodedMessage = encodeURIComponent(message);
+  const whatsappUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedMessage}`;
+  
+  window.open(whatsappUrl, "_blank");
+}
+
 export function subscribeToStoreSettings(callback) {
   let unsubscribeFirestore = () => {};
 
@@ -795,6 +827,19 @@ export async function logoutAdmin() {
   if (auth) {
     await signOut(auth);
   }
+  clearAdminSession();
+}
+
+export function setAdminSession() {
+  sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+}
+
+export function clearAdminSession() {
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
+export function hasAdminSession() {
+  return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
 }
 
 async function reauthenticateAdmin(currentPassword) {
