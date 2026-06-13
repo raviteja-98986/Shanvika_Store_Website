@@ -7,7 +7,9 @@ import {
   updateEmail,
   updatePassword,
   EmailAuthProvider,
-  reauthenticateWithCredential
+  reauthenticateWithCredential,
+  setPersistence,
+  browserSessionPersistence
 } from "firebase/auth";
 import {
   collection,
@@ -72,6 +74,10 @@ if (isFirebaseConfigured) {
     const initializedApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     firestore = getFirestore(initializedApp);
     auth = getAuth(initializedApp);
+    setPersistence(auth, browserSessionPersistence)
+   .catch((error) => {
+    console.error("Persistence error:", error);
+    });
     if (USE_FIREBASE_STORAGE && firebaseConfig.storageBucket) {
       storage = getStorage(initializedApp);
     }
@@ -819,9 +825,15 @@ export async function loginAdmin(email, password) {
     throw new Error("Firebase Auth is not configured.");
   }
 
-  const result = await signInWithEmailAndPassword(auth, email.trim(), password);
-  return result.user;
-}
+  await setPersistence(auth, browserSessionPersistence);
+  console.log("Admin login attempt:", email);
+  return signInWithEmailAndPassword(
+    auth,
+    email,
+    password
+  );
+};
+
 
 export async function logoutAdmin() {
   if (auth) {

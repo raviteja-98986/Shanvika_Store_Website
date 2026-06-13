@@ -116,19 +116,16 @@ export default function Admin() {
     return () => window.removeEventListener("shanvika_cloud_mode_changed", syncCloudMode);
   }, []);
 
-  useEffect(() => {
-    return subscribeToAdminAuth((user) => {
-      if (user && !hasAdminSession()) {
-        logoutAdmin().then(() => {
-          setAuthUser(null);
-          setAuthReady(true);
-        });
-      } else {
-        setAuthUser(user);
-        setAuthReady(true);
-      }
-    });
-  }, []);
+useEffect(() => {
+  const unsubscribe = subscribeToAdminAuth((user) => {
+    console.log("Auth state changed:", user);
+
+    setAuthUser(user);
+    setAuthReady(true);
+  });
+
+  return unsubscribe;
+}, []);
 
   useEffect(() => {
     if (!authReady) return undefined;
@@ -251,22 +248,38 @@ export default function Admin() {
     return { revenue, lowStock };
   }, [orders, products]);
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
-    setLoginError("");
-    setLoginLoading(true);
+const handleLogin = async (event) => {
+  event.preventDefault();
+  setLoginError("");
+  setLoginLoading(true);
 
-    try {
-      await loginAdmin(loginForm.email, loginForm.password);
-      setAdminSession();
-      setLoginForm({ email: "", password: "" });
-    } catch (error) {
-      console.error("Admin login failed:", error);
-      setLoginError("Login failed. Check the Firebase Auth email and password.");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
+  try {
+    const result = await loginAdmin(
+      loginForm.email,
+      loginForm.password
+    );
+
+    console.log("LOGIN SUCCESS:", result.user);
+
+    setAdminSession();
+    setAuthUser(result.user);
+
+    setLoginForm({
+      email: "",
+      password: ""
+    });
+  } catch (error) {
+    console.error("Admin login failed:", error);
+    console.log("CODE:", error.code);
+    console.log("MESSAGE:", error.message);
+
+    setLoginError(
+      `${error.code} - ${error.message}`
+    );
+  } finally {
+    setLoginLoading(false);
+  }
+};
 
   const handleProductImage = async (event) => {
     const file = event.target.files?.[0];
@@ -378,6 +391,13 @@ export default function Admin() {
     );
   }
 
+//   console.log({
+//   authUser,
+//   authReady,
+//   cloudSync,
+//   session: hasAdminSession()
+// });
+
   if (!authUser && cloudSync) {
     return (
       <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center px-4">
@@ -432,7 +452,7 @@ export default function Admin() {
       </div>
     );
   }
-
+  try{
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-left">
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
@@ -894,7 +914,8 @@ export default function Admin() {
       </main>
     </div>
   );
-}
+
+
 
 function Stat({ label, value }) {
   return (
@@ -1014,4 +1035,10 @@ function ProductThumb({ product }) {
       {product.name?.slice(0, 2).toUpperCase() || "PR"}
     </div>
   );
+}
+}
+ catch (err) {
+  console.error(err);
+  return <div>Error rendering admin panel</div>;
+}
 }
